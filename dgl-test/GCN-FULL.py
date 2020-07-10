@@ -141,7 +141,7 @@ def main(args):
     # data = RedditDataset(self_loop=True)
 
 
-
+    t_time = 0
     out = []
     o_time = []
     data = citegrh.load_pubmed()
@@ -200,7 +200,7 @@ def main(args):
     batch_sampling_method = np.array([])
     test_batch_sampling_method = np.array([])
     layer_size = np.array([2,1])
-    layer_scale = np.array([0.8,0.6])
+    layer_scale = np.array([0.6,0.4])
     
     # Value
     for layer in range(args.n_layers):
@@ -209,7 +209,7 @@ def main(args):
     for layer in range(args.n_layers):
         for nodes in range(g.number_of_nodes()):
             test_batch_sampling_method = np.append(test_batch_sampling_method, 10000)
-    ''' 
+    '''
     # Scale 
     for layer in range(args.n_layers):
         for nodes in range(g.number_of_nodes()):
@@ -325,7 +325,8 @@ def main(args):
         c_time = round((time_next-time_now),4)
         print('In round: ',epoch,' Test Accuracy: ',acc,'Test Loss: ',loss.data,' Test cost: ', c_time)
         out.append(acc)
-        o_time.append(c_time)
+        t_time = round((t_time + c_time),4)
+        o_time.append(t_time)
         time_now = time_next
     dataframe = pd.DataFrame({'acc':out})
     dataframe.to_csv("./acc.csv",header = False,index=False,sep=',')
