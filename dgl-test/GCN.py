@@ -24,6 +24,8 @@ from PG_torch import PolicyNet
 import math
 
 acc=0
+n_test_samples_test=0
+'''
 n_neighbors = np.array([0,1,1]).astype(np.int64)
 all_neighbors = np.array([0,10000,10000]).astype(np.int64)
 def pca_svd(data, k):
@@ -37,18 +39,18 @@ def pca_svd(data, k):
 # Input Example
 all_graph_flag = "Neighbor_Sampling"
 all_graph_sample = np.array([])
-for count in range(3327):
+for count in range(100000):
     all_graph_sample = np.append(all_graph_sample, 10000)
 example_graph_flag = "Layer_Sampling"
-example_graph_sample = np.array([2,4])
-
+example_graph_sample = np.array([5,5])
+'''
 # TODO:
 # Input Sample method and data.Put out NP array
 # emp_neighbors = [method, data]
 # Example             ^   |  ^
 # temp_neighbors =   [0,  |  5, 6] ==> Two layers' layer sampling
 # temp_neighbors =   [1,  |  2, 1, 5, 7, ..., 2] ==> Sampling for every node
-#                            |-- all vectors --|  
+#                            |-- all vectors --|
 def Sampler_Input(method, data):
     if(method=="Layer_Sampling"):
         temp_neighbors = np.array([0])
@@ -258,7 +260,7 @@ def runGraph(Model,Graph,args,Optimizer,Labels,train_nid,cuda,num_neighbors):
         # sampling
     time_now = time.time()
     for nf in dgl.contrib.sampling.NeighborSampler(Graph, args.batch_size,
-                                                            expand_factor = Sampler_Input(example_graph_flag, example_graph_sample),
+                                                            expand_factor = num_neighbors,
                                                             neighbor_type='in',
                                                             shuffle=True,
                                                             num_workers=10,
@@ -312,7 +314,7 @@ def inference(Graph,infer_model,args,Labels,Test_nid,In_feats,N_classes,N_test_s
     num_acc = 0.
 
     for nf in dgl.contrib.sampling.NeighborSampler(Graph, args.test_batch_size,
-                                                        expand_factor = Sampler_Input(all_graph_flag, all_graph_sample),
+                                                        expand_factor = N_test_samples,
                                                         neighbor_type='in',
                                                         num_workers=32,
                                                         num_hops=args.n_layers+1,
@@ -324,7 +326,7 @@ def inference(Graph,infer_model,args,Labels,Test_nid,In_feats,N_classes,N_test_s
             batch_nids = nf.layer_parent_nid(-1).to(device=pred.device, dtype=torch.long)
             batch_labels = Labels[batch_nids]
             num_acc += (pred.argmax(dim=1) == batch_labels).sum().cpu().item()
-    acc = round(num_acc/N_test_samples,4)
+    acc = round(num_acc/n_test_samples_test,4)
 
 
         # r = pow(64,(acc-A))+math.log(time_cost_past-time_cost)
@@ -344,21 +346,21 @@ def inference(Graph,infer_model,args,Labels,Test_nid,In_feats,N_classes,N_test_s
 def Gen_args(num):
     parser = argparse.ArgumentParser(description='GCN')
     register_data_args(parser)
-    parser.add_argument("--dropout", type=float, default=0.6,
+    parser.add_argument("--dropout", type=float, default=0.5,
             help="dropout probability")
     parser.add_argument("--gpu", type=int, default=0,
             help="gpu")
-    parser.add_argument("--lr", type=float, default=0.001,
+    parser.add_argument("--lr", type=float, default=0.003,
             help="learning rate")
-    parser.add_argument("--n-epochs", type=int, default=1000,
+    parser.add_argument("--n-epochs", type=int, default=500,
             help="number of training epochs")
-    parser.add_argument("--batch-size", type=int, default=10,
+    parser.add_argument("--batch-size", type=int, default=128,
             help="batch size")
-    parser.add_argument("--test-batch-size", type=int, default=1000,
+    parser.add_argument("--test-batch-size", type=int, default=20000,
             help="test batch size")
     parser.add_argument("--num-neighbors", type=int, default=num,
             help="number of neighbors to be sampled")
-    parser.add_argument("--n-hidden", type=int, default=16,
+    parser.add_argument("--n-hidden", type=int, default=32,
             help="number of hidden gcn units")
     parser.add_argument("--n-layers", type=int, default=1,
             help="number of hidden gcn layers")
@@ -374,7 +376,7 @@ if __name__ == '__main__':
     time_total = []
     out_total = []
     I = 1
-    
+
     for i in range(I):
         args = Gen_args(20000)   # return the parameters
 
@@ -420,13 +422,39 @@ if __name__ == '__main__':
 
         s = []
         s_ = []
+        
+        # Input Example
+        batch_sampling_method = np.array([])
+        test_batch_sampling_method = np.array([])
+        layer_size = np.array([100,100])
+        layer_scale = np.array([1,1])        
+        
+        ''' 
+        # Value
+        for layer in range(args.n_layers + 1):
+            for nodes in range(g.number_of_nodes()):
+                batch_sampling_method = np.append(batch_sampling_method, layer_size[layer])
+        for layer in range(args.n_layers + 1):
+            for nodes in range(g.number_of_nodes()):
+                test_batch_sampling_method = np.append(test_batch_sampling_method, 10000)
+        '''
+        # Scale 
+        for layer in range(args.n_layers + 1):
+            for nodes in range(g.number_of_nodes()):
+                temp = math.ceil(g.in_degree(nodes) * layer_scale[layer])
+                batch_sampling_method = np.append(batch_sampling_method, temp)
+        for layer in range(args.n_layers + 1):
+            for nodes in range(g.number_of_nodes()):
+                test_batch_sampling_method = np.append(test_batch_sampling_method, 10000)
+
+        
 
         for epoch in range(args.n_epochs):
 
             time_now = time.time()
-            p1, time_cost1, loss1 = runGraph(model1,g,args,optimizer1,labels,train_nid1,cuda,args.num_neighbors)
-            p2, time_cost2, loss2 = runGraph(model2,g,args,optimizer2,labels,train_nid2,cuda,args.num_neighbors)
-            p3, time_cost3, loss3 = runGraph(model3,g,args,optimizer3,labels,train_nid3,cuda,args.num_neighbors)
+            p1, time_cost1, loss1 = runGraph(model1,g,args,optimizer1,labels,train_nid1,cuda,batch_sampling_method)
+            p2, time_cost2, loss2 = runGraph(model2,g,args,optimizer2,labels,train_nid2,cuda,batch_sampling_method)
+            p3, time_cost3, loss3 = runGraph(model3,g,args,optimizer3,labels,train_nid3,cuda,batch_sampling_method)
 
             # loss
             loss = (loss1 + loss2 + loss3)/3
@@ -446,7 +474,7 @@ if __name__ == '__main__':
                 infer_param.data.copy_(param.data)
 
             # test
-            acc= inference(g,infer_model,args,labels,test_nid,in_feats,n_classes,n_test_samples,cuda)
+            acc= inference(g,infer_model,args,labels,test_nid,in_feats,n_classes,test_batch_sampling_method,cuda)
 
             out.append(acc)
             time_end = time.time()
@@ -470,6 +498,6 @@ if __name__ == '__main__':
         time_total[epoch] = round((time_total[epoch] / I), 4)
 
     dataframe = pd.DataFrame({'acc':out_total})
-    dataframe.to_csv("./GCN-Citeseer/acc_nondqn.csv",header = False,index=False,sep=',')
+    dataframe.to_csv("./acc.csv",header = False,index=False,sep=',')
     dataframe2 = pd.DataFrame({'time':time_total})
-    dataframe2.to_csv("./GCN-Citeseer/time_nondqn.csv",header = False,index=False,sep=',')
+    dataframe2.to_csv("./time.csv",header = False,index=False,sep=',')
