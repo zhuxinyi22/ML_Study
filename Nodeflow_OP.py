@@ -43,7 +43,7 @@ def DelNonLocalEdges(graph, subgraph, nodeflows):
                     if subgraph.has_node(sub_node_b.tolist[0])==False:
                         tmp_graph.remove_edges(graph.edge_id(node_m, node_b))
                         tmp_graph.remove_edges(graph.edge_id(node_b, node_m))
-        seed_nid = seed_nid + nf.layer_parent_nid(-1)[0]
+        seed_nid = seed_nid + nf.layer_nid(-1)[0]
         subgraphs = subgraph + tmp_graph
                         
     return subgraphs,seed_nid
