@@ -19,11 +19,13 @@ def DelNonLocalEdges(graph, subgraph, nodeflows):
     Subgraph : the list of processed nodeflows in DGLGraph format
     '''
     subgraphs = []
+    seed_nid = []
+
     for nf in nodeflows:
         # 取第二层以及第三层的节点在总图上的id
         middle_layer = nf.layer_parent_nid(1)
-        bottom_layer = nf.layer_parent_nid(0)
-        
+        bottom_layer = nf.layer_parent_nid(0)        
+
         # 建立子图
         edges_list = []
         for blocks in range(nf.num_blocks()-1):
@@ -41,9 +43,10 @@ def DelNonLocalEdges(graph, subgraph, nodeflows):
                     if subgraph.has_node(sub_node_b.tolist[0])==False:
                         tmp_graph.remove_edges(graph.edge_id(node_m, node_b))
                         tmp_graph.remove_edges(graph.edge_id(node_b, node_m))
+        seed_nid = seed_nid + nf.layer_parent_nid(-1)[0]
         subgraphs = subgraph + tmp_graph
                         
-    return subgraphs
+    return subgraphs,seed_nid
 
 def FullSamplingForList(graphs):
     ''' Run Full Sampling algorithm for the graph list
