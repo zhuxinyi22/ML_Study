@@ -1,5 +1,3 @@
-
-
 import argparse, time, math
 import gym
 import numpy as np
@@ -24,7 +22,7 @@ import time
 import datetime
 import math
 import sys
-sys.path.append("/home/m5232121/ML-Distribution/Agent")
+sys.path.append("/home/FedGraph/Agent")
 from DDPG import Agent
 from sklearn.decomposition import PCA
 from collections import deque
