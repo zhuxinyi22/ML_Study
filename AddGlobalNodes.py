@@ -22,7 +22,7 @@ import time
 import datetime
 import math
 import sys
-sys.path.append("/home/FedGraph/Agent")
+sys.path.append("/home/m5232121/ML-Distribution/Agent")
 from DDPG import Agent
 from sklearn.decomposition import PCA
 from collections import deque
@@ -125,7 +125,7 @@ class gcnEnv(gym.Env):
         Loss = [None for i in range (self.num_clients)]
         for i in range(self.num_clients):
             P[i], Time_cost[i], Loss[i] = runGraph(self.Model[i],self.g, self.g_local[i],self.args,self.Optimizer[i],\
-                self.labels_local[i],self.Train_nid[i],self.norm_local[i],self.features_local[i],self.train_mask_local[i],self.cuda,Batch_sampling_method[i])
+                self.labels,self.Train_nid[i],self.norm_local[i],self.features_local[i],self.train_mask_local[i],self.cuda,Batch_sampling_method[i])
 
 
 #################################################################################################################################        
@@ -531,13 +531,14 @@ def DelNonLocalEdges(graph, subgraph, nodeflows):
         subgraphs = subgraphs + [tmp_graph]
     return subgraphs,seed_nid
 
-def AddGlobalNodes(graph, localgraph, nodeflows):
+def AddGlobalNodes(graph, localgraph, nodeflows, labels):
     '''Add one hop nodes in global graph to the local graph
     Parameters
     ----------
     graph : the whole graph
     subgraph : the subgraph of local client
     nodeflows : the nodeflow list get from sampling  *** one hop nodeflow sampling from gobal graph 
+    labels ： labels on the local graph
     Return
     ----------
     subgraph : the subgraph contains one hop nodes in global
@@ -552,9 +553,14 @@ def AddGlobalNodes(graph, localgraph, nodeflows):
     nodes_return = nodes_in_local + nodes_in_global
     nodes_return_tmp = set(nodes_return)
     nodes_return = list(nodes_return_tmp)
+    nodes_return.sort()
     subgraph = graph.subgraph(nodes_return)
     subgraph.copy_from_parent()
-    return subgraph
+    sub_labels = []
+    for _ in nodes_return:
+        sub_labels.append(labels[_])
+    sub_labels_tensor = torch.LongTensor(sub_labels)
+    return subgraph, sub_labels_tensor
 
 # train process
 def runGraph(Model,Graph, Local_Graph,args,Optimizer,Labels,train_nid,norm_local,features_local,train_mask_local,cuda,sampling):
@@ -577,23 +583,24 @@ def runGraph(Model,Graph, Local_Graph,args,Optimizer,Labels,train_nid,norm_local
                                                             num_hops=1,
                                                             seed_nodes=train_nid)
 
-    subGraph = AddGlobalNodes(Graph, Local_Graph, NodeFlow)
+    subGraph, subLabels = AddGlobalNodes(Graph, Local_Graph, NodeFlow, Labels)
     subGraph.to(torch.device('cuda:0'))
+    subGraph_train_nid = subGraph.map_to_subgraph_nid(train_nid)
     for nf in dgl.contrib.sampling.NeighborSampler(subGraph, args.batch_size,
                                                             expand_factor = sampling,
                                                             neighbor_type='in',
                                                             shuffle=True,
                                                             num_workers=16,
                                                             num_hops=args.n_layers+1,
-                                                            seed_nodes=train_nid):
+                                                            seed_nodes=subGraph_train_nid):
         nf.copy_from_parent()
         time_now = time.time()
         Model.train()
         # forward
         pred = Model(nf)
         pred.to(torch.device('cuda:0'))
-        batch_nids = nf.layer_parent_nid(-1).to(device=pred.device, dtype=torch.long)  
-        batch_labels = Labels[batch_nids].to(torch.device('cuda:0'))
+        batch_nids = nf.layer_parent_nid(-1)
+        batch_labels = subLabels[batch_nids].to(torch.device('cuda:0'))
         batch_labels.to(torch.device('cuda:0'))
         loss = loss_fcn(pred, batch_labels).to(torch.device('cuda:0'))
         Optimizer.zero_grad()
